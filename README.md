@@ -34,7 +34,7 @@ git clone <your-repo-url> personal-expense-categorizer
 cd personal-expense-categorizer
 npm install
 npm run build
-npm test          # builds and runs 18 tests
+npm test          # builds and runs 27 tests
 ```
 
 ### Register the MCP server in Bob
@@ -145,9 +145,12 @@ Matching is case- and punctuation-insensitive, on whole words. The longest match
 ## Privacy and safety
 
 - Local only: the server contains no network code and sends nothing anywhere.
-- The server reads only `.csv`, `.tsv` or `.txt` files up to 10 MB, and only when a tool call names them.
-- Export never overwrites unless you say so, and neutralizes spreadsheet formula injection.
-- `.gitignore` blocks all `*.csv` except the synthetic `test-data/` files. **Do not commit real statements.**
+- The server reads only `.csv`, `.tsv` or `.txt` files up to 10 MB (checked again after resolving symlinks), and only when a tool call names them.
+- Set `EXPENSE_ALLOWED_DIRS` (e.g. `/Users/you/Downloads`, multiple folders separated by `:`) to restrict all reads and writes to those folders. Recommended; add it under `env` in your `mcp.json`.
+- Export never overwrites unless you say so, and even then only replaces files this server exported earlier. It also neutralizes spreadsheet formula injection.
+- `rules.json` is validated on load and saved with owner-only permissions (600).
+- `.gitignore` blocks bank-export formats, `.env.*` and `rules.json`, except the five synthetic `test-data/` files. **Do not commit real statements.**
+- See [SECURITY.md](SECURITY.md) for the threat model and how to report a vulnerability.
 - Your Bob client may send tool results to its model provider. Tool results include transaction descriptions
   and amounts, so use a provider you are comfortable with for financial data.
 

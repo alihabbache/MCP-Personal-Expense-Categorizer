@@ -71,10 +71,10 @@ flowchart TD
 | Component | Responsibility | Key decisions |
 |---|---|---|
 | `index.ts` | Registers 6 tools with zod schemas and annotations; converts exceptions to `isError` results | Thin: no business logic. Logs to stderr only, because stdout is the protocol channel |
-| `service.ts` | Reads the file (extension allow-list `.csv/.tsv/.txt`, 10 MB cap), runs parse, categorize, then the requested report | Single place for file-system safety checks. Export uses `wx` flag so it never overwrites silently |
+| `service.ts` | Reads the file (extension allow-list `.csv/.tsv/.txt`, 10 MB cap), runs parse, categorize, then the requested report | Single place for file-system safety checks: symlink-resolved extension check, optional `EXPENSE_ALLOWED_DIRS` sandbox, 10 MB cap. Export uses the `wx` flag for new files and only replaces a file that starts with its own export header |
 | `parser.ts` | Finds the header row in the first 20 rows, maps columns by alias, resolves dates, amounts and sign convention, assigns stable IDs | Pure function of text. Ambiguity produces a warning, not a guess hidden from the user |
 | `csv.ts` | Dependency-free CSV state machine (quotes, escaped quotes, CRLF, BOM, `,` `;` tab); `csvField` escapes output | Output fields starting with `= + - @` are prefixed with `'` to block spreadsheet formula injection |
-| `rules.ts` | Loads default and user rules, normalizes text, matches, derives the merchant name, persists user rules | Whole-phrase matching on normalized text; longest keyword wins; user beats default on ties |
+| `rules.ts` | Loads default and user rules, validates `rules.json`, normalizes text, matches, derives the merchant name, persists user rules (mode 600) | Whole-phrase matching on normalized text; longest keyword wins; user beats default on ties |
 | `analysis.ts` | Spending summary, recurring-charge detection, categorized CSV output | Transfers excluded from income and expense so paying a credit card is not counted twice |
 
 ### 4.1 Data model
@@ -149,8 +149,8 @@ gaps within 4 days of the median. Output includes typical amount and next expect
 | `summarize_spending` | read-only | | Period, totals, by category (with share), by month, uncategorized total |
 | `find_recurring_charges` | read-only | | Recurring groups, estimated monthly total |
 | `list_categories` | read-only | | Categories, kinds, rule counts, rules file path |
-| `add_category_rule` | write (local rules file) | `keyword`, `category`, `kind?` | Path, `added` (idempotent) |
-| `export_categorized_csv` | write (new file) | `output_path` (.csv), `overwrite?` | Path, row count |
+| `add_category_rule` | write (local rules file) | `keyword` (max 100 chars), `category` (max 60), `kind?` | Path, `added` (idempotent) |
+| `export_categorized_csv` | write, `destructiveHint: true` | `output_path` (.csv), `overwrite?` | Resolved path, row count |
 
 Shared parse options: `file_path`, `date_format` (auto, MDY, DMY), `amount_convention` (auto,
 negative_is_expense, positive_is_expense), `column_map`.
@@ -163,7 +163,7 @@ the exact header names"), not as protocol errors.
 | Data | Location | Notes |
 |---|---|---|
 | Default rules | `config/default-categories.json` | Versioned in the repo; 14 categories |
-| User rules | `~/.personal-expense-categorizer/rules.json` (override with `EXPENSE_RULES_PATH`) | Created on first `add_category_rule`; plain JSON the user can edit |
+| User rules | `~/.personal-expense-categorizer/rules.json` (override with `EXPENSE_RULES_PATH`) | Created on first `add_category_rule` with mode 600 (directory 700); plain JSON the user can edit; shape and lengths validated on load |
 | Transactions | Not stored | Re-read from the source CSV on each call; IDs are stable hashes so results can be correlated |
 
 ## 8. Security and privacy
@@ -171,15 +171,16 @@ the exact header names"), not as protocol errors.
 | Threat | Mitigation |
 |---|---|
 | Data exfiltration | No network code and no runtime dependency beyond the MCP SDK and zod |
-| Arbitrary file read via tool argument | Extension allow-list, regular-file check, 10 MB cap. The e2e test confirms `/etc/passwd` is refused |
-| Arbitrary file overwrite via export | Must end in `.csv`, differ from input, `wx` flag unless `overwrite=true` |
+| Arbitrary file read via tool argument | Extension allow-list checked before and after resolving symlinks, regular-file check, 10 MB cap, optional `EXPENSE_ALLOWED_DIRS` sandbox. The e2e test confirms `/etc/passwd` is refused |
+| Arbitrary file overwrite via export | Must end in `.csv`, resolved real path must differ from input and sit inside `EXPENSE_ALLOWED_DIRS` when set; existing files are refused unless `overwrite=true` **and** the file starts with this tool's export header; tool is annotated `destructiveHint: true` |
+| Malformed or oversized rules | `rules.json` shape is validated; keyword, category, path and header lengths are capped; file is mode 600 |
 | Spreadsheet formula injection in exported CSV | Text fields starting with `= + - @` or control whitespace are prefixed with `'` |
 | Prompt injection through merchant text | Skill instructs the model to treat descriptions as data; tools never execute or fetch their content |
-| Committing real statements | `.gitignore` excludes every `*.csv` except `test-data/`; all fixtures are synthetic |
+| Committing real statements | `.gitignore` excludes `*.csv/.tsv/.txt/.xlsx/.ofx/.qfx/.pdf`, `.env.*` and `rules.json`, with exceptions only for the five named fixtures; all fixtures are synthetic |
 | Credentials | None required |
 
-Residual risk: any file path the user's MCP client can name with an allowed extension is readable by the
-server. The server runs with the user's own privileges.
+Residual risk: unless `EXPENSE_ALLOWED_DIRS` is set, any file path the user's MCP client can name with an allowed
+extension is readable by the server. The server runs with the user's own privileges. See [SECURITY.md](../SECURITY.md).
 
 ## 9. Error handling and observability
 
@@ -192,7 +193,8 @@ server. The server runs with the user's own privileges.
 | Layer | File | Covers |
 |---|---|---|
 | Unit | `tests/categorizer.test.ts` | CSV tokenizer, amount formats, 5 fixtures, date ambiguity, matching precedence, summary math, recurring, export escaping |
-| End to end | `tests/mcp-e2e.test.ts` | Spawns the built server, real JSON-RPC handshake, `tools/list`, learning loop, export overwrite protection, path refusal |
+| Security | `tests/security.test.ts` | Overwrite protection for foreign files, symlink handling, `EXPENSE_ALLOWED_DIRS`, rules validation, length caps, file mode, `.gitignore` rules |
+| End to end | `tests/mcp-e2e.test.ts` | Spawns the built server, real JSON-RPC handshake, `tools/list`, destructive annotation, learning loop, export overwrite protection, path refusal |
 
 Fixtures in `test-data/` are synthetic and each targets a behavior:
 
