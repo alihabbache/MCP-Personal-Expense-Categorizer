@@ -1,0 +1,32 @@
+{
+  "name": "personal-expense-categorizer",
+  "version": "0.1.0",
+  "description": "Skill + MCP server that reads CSV bank exports and tags transactions with spending categories. Local-only, no network.",
+  "type": "module",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "personal-expense-categorizer": "./build/src/index.js"
+  },
+  "files": [
+    "build/src",
+    "config",
+    ".bob/skills"
+  ],
+  "scripts": {
+    "build": "tsc && chmod 755 build/src/index.js",
+    "test": "npm run build && node --test build/tests/categorizer.test.js build/tests/mcp-e2e.test.js",
+    "start": "node build/src/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "^2.4.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  }
+}

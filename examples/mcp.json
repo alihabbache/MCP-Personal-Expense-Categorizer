@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "personal-expense-categorizer": {
+      "command": "node",
+      "args": ["${workspaceFolder}/build/src/index.js"]
+    }
+  }
+}

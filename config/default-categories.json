@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "categories": {
+    "Groceries": {
+      "kind": "expense",
+      "keywords": ["whole foods", "trader joe", "safeway", "kroger", "aldi", "costco", "wegmans", "publix", "tesco", "sainsbury", "lidl", "grocery", "supermarket"]
+    },
+    "Dining": {
+      "kind": "expense",
+      "keywords": ["starbucks", "mcdonald", "chipotle", "subway", "domino", "pizza", "doordash", "uber eats", "ubereats", "grubhub", "deliveroo", "restaurant", "cafe", "coffee", "bistro", "diner", "sushi", "taqueria"]
+    },
+    "Transport": {
+      "kind": "expense",
+      "keywords": ["uber trip", "uber", "lyft", "shell", "chevron", "exxon", "bp", "gas station", "fuel", "parking", "metro", "transit", "amtrak", "mta"]
+    },
+    "Shopping": {
+      "kind": "expense",
+      "keywords": ["amazon", "amzn", "target", "walmart", "best buy", "ikea", "etsy", "ebay", "home depot", "nike", "zara"]
+    },
+    "Subscriptions": {
+      "kind": "expense",
+      "keywords": ["netflix", "spotify", "hulu", "disney plus", "apple com bill", "icloud", "youtube premium", "adobe", "dropbox", "github", "openai", "audible", "patreon"]
+    },
+    "Utilities": {
+      "kind": "expense",
+      "keywords": ["electric", "pg e", "con edison", "water bill", "gas bill", "comcast", "xfinity", "verizon", "att", "t mobile", "internet", "utility", "utilities"]
+    },
+    "Housing": {
+      "kind": "expense",
+      "keywords": ["rent", "mortgage", "landlord", "property management", "hoa", "apartment"]
+    },
+    "Health": {
+      "kind": "expense",
+      "keywords": ["cvs", "walgreens", "pharmacy", "dental", "dentist", "clinic", "hospital", "doctor", "gym", "fitness", "planet fitness"]
+    },
+    "Travel": {
+      "kind": "expense",
+      "keywords": ["airline", "delta air", "united air", "american air", "southwest", "airbnb", "marriott", "hilton", "hotel", "expedia", "booking com"]
+    },
+    "Entertainment": {
+      "kind": "expense",
+      "keywords": ["cinema", "amc theat", "ticketmaster", "steam games", "playstation", "xbox", "nintendo", "concert", "museum"]
+    },
+    "Insurance": {
+      "kind": "expense",
+      "keywords": ["geico", "state farm", "allstate", "progressive", "insurance"]
+    },
+    "Fees": {
+      "kind": "expense",
+      "keywords": ["service fee", "monthly fee", "overdraft", "atm fee", "interest charge", "late fee", "foreign transaction"]
+    },
+    "Income": {
+      "kind": "income",
+      "keywords": ["payroll", "direct dep", "salary", "paycheck", "interest paid", "dividend", "tax refund"]
+    },
+    "Transfers": {
+      "kind": "transfer",
+      "keywords": ["transfer", "xfer", "venmo", "zelle", "paypal transfer", "credit card payment", "payment thank you", "autopay", "savings"]
+    }
+  }
+}
