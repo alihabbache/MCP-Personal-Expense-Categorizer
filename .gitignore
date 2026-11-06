@@ -3,7 +3,21 @@ build/
 .DS_Store
 *.log
 .env
+.env.*
+!.env.example
 
-# Real bank exports must never be committed. Only synthetic files under test-data/ are allowed.
+# Real bank exports and local rules must never be committed.
+# Only the five synthetic fixtures under test-data/ are allowed.
 *.csv
-!test-data/*.csv
+*.tsv
+*.txt
+*.xlsx
+*.ofx
+*.qfx
+*.pdf
+rules.json
+!test-data/sample-ambiguous-dates.csv
+!test-data/sample-bank-eu-debit-credit.csv
+!test-data/sample-checking-us.csv
+!test-data/sample-credit-card-positive.csv
+!test-data/sample-edge-cases.csv
