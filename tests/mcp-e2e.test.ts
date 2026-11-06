@@ -71,6 +71,10 @@ test("mcp e2e: handshake, tools, rule learning, export", async () => {
       "summarize_spending",
     ]);
 
+    const exportTool = list.result.tools.find((t: any) => t.name === "export_categorized_csv");
+    assert.equal(exportTool.annotations.destructiveHint, true, "export can replace files, so it must be marked destructive");
+    assert.equal(exportTool.annotations.readOnlyHint, false);
+
     const unc = await call("categorize_transactions", { file_path: US, only_uncategorized: true });
     const uncBody = JSON.parse(unc.content[0].text);
     assert.equal(uncBody.uncategorized, 2);
@@ -91,6 +95,12 @@ test("mcp e2e: handshake, tools, rule learning, export", async () => {
     assert.ok((await readFile(out, "utf8")).startsWith("id,date,"));
     const again = await call("export_categorized_csv", { file_path: US, output_path: out });
     assert.equal(again.isError, true, "must refuse to overwrite by default");
+
+    const tooLong = await request("tools/call", {
+      name: "add_category_rule",
+      arguments: { keyword: "x".repeat(101), category: "Dining" },
+    });
+    assert.ok(tooLong.error || tooLong.result?.isError, "over-long keyword must be rejected by the schema");
 
     const bad = await call("summarize_spending", { file_path: join(tmp, "nope.csv") });
     assert.equal(bad.isError, true);

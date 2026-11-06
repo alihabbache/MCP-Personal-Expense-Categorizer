@@ -18,7 +18,7 @@
   ],
   "scripts": {
     "build": "tsc && chmod 755 build/src/index.js",
-    "test": "npm run build && node --test build/tests/categorizer.test.js build/tests/mcp-e2e.test.js",
+    "test": "npm run build && node --test build/tests/categorizer.test.js build/tests/security.test.js build/tests/mcp-e2e.test.js",
     "start": "node build/src/index.js"
   },
   "dependencies": {

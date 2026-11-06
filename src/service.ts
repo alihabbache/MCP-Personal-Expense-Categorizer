@@ -1,30 +1,72 @@
-import { readFile, stat, writeFile } from "node:fs/promises";
-import { extname, resolve } from "node:path";
+import { lstat, open, readFile, realpath, stat, writeFile } from "node:fs/promises";
+import { basename, delimiter, extname, isAbsolute, join, relative, resolve } from "node:path";
 import { parseBankCsv } from "./parser.js";
 import { categorizeAll, loadRuleSet, UNCATEGORIZED } from "./rules.js";
-import { findRecurring, summarize, toCategorizedCsv } from "./analysis.js";
+import { EXPORT_HEADER, findRecurring, summarize, toCategorizedCsv } from "./analysis.js";
 import type { ParseOptions, ParseResult, Transaction } from "./types.js";
 
 export const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_EXT = new Set([".csv", ".tsv", ".txt"]);
 
-/** Read a bank export from disk with basic safety checks (extension allow-list, size cap). */
+/** Resolve symlinks for the longest existing prefix of a path (the path itself may not exist yet). */
+async function realpathLoose(p: string): Promise<string> {
+  try {
+    return await realpath(p);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
+    return join(await realpathLoose(resolve(p, "..")), basename(p));
+  }
+}
+
+/** Optional sandbox: EXPENSE_ALLOWED_DIRS is a path-delimiter separated list. Unset means unrestricted. */
+async function assertAllowed(realPath: string, what: string): Promise<void> {
+  const raw = process.env.EXPENSE_ALLOWED_DIRS;
+  if (!raw || !raw.trim()) return;
+  const roots = await Promise.all(raw.split(delimiter).filter((d) => d.trim()).map((d) => realpathLoose(resolve(d))));
+  const ok = roots.some((root) => {
+    const rel = relative(root, realPath);
+    return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+  });
+  if (!ok) throw new Error(`Refusing ${what} ${realPath}: it is outside the folders allowed by EXPENSE_ALLOWED_DIRS.`);
+}
+
+function assertExt(path: string): void {
+  if (!ALLOWED_EXT.has(extname(path).toLowerCase())) {
+    throw new Error(`Refusing to read ${path}: only .csv, .tsv or .txt files are accepted.`);
+  }
+}
+
+/** Read a bank export from disk with safety checks (symlink-resolved extension and folder checks, size cap). */
 export async function readBankFile(filePath: string): Promise<string> {
   const abs = resolve(filePath);
-  if (!ALLOWED_EXT.has(extname(abs).toLowerCase())) {
-    throw new Error(`Refusing to read ${abs}: only .csv, .tsv or .txt files are accepted.`);
-  }
-  let info;
+  assertExt(abs);
+  let real: string;
   try {
-    info = await stat(abs);
+    real = await realpath(abs);
   } catch {
     throw new Error(`File not found: ${abs}`);
   }
+  // A symlink named x.csv must not expose a file that is not a bank export.
+  assertExt(real);
+  await assertAllowed(real, "to read");
+  const info = await stat(real);
   if (!info.isFile()) throw new Error(`Not a regular file: ${abs}`);
   if (info.size > MAX_FILE_BYTES) {
     throw new Error(`File is ${(info.size / 1048576).toFixed(1)} MB; the limit is ${MAX_FILE_BYTES / 1048576} MB.`);
   }
-  return readFile(abs, "utf8");
+  return readFile(real, "utf8");
+}
+
+/** True when the file starts with the header this server writes, i.e. a previous export of ours. */
+async function isOurExport(path: string): Promise<boolean> {
+  const fh = await open(path, "r");
+  try {
+    const buf = Buffer.alloc(EXPORT_HEADER.length + 1);
+    const { bytesRead } = await fh.read(buf, 0, buf.length, 0);
+    return buf.toString("utf8", 0, bytesRead).startsWith(EXPORT_HEADER + "\n");
+  } finally {
+    await fh.close();
+  }
 }
 
 export interface Loaded {
@@ -89,13 +131,31 @@ export async function exportCsv(
 ): Promise<{ output_path: string; rows: number }> {
   const out = resolve(outputPath);
   if (extname(out).toLowerCase() !== ".csv") throw new Error("output_path must end in .csv");
-  if (out === resolve(filePath)) throw new Error("output_path must differ from the input file.");
+  const realOut = await realpathLoose(out);
+  await assertAllowed(realOut, "to write");
+  if (realOut === (await realpathLoose(resolve(filePath)))) throw new Error("output_path must differ from the input file.");
+
+  let existing: Awaited<ReturnType<typeof lstat>> | null = null;
+  try {
+    existing = await lstat(realOut);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
+  }
+  if (existing) {
+    if (!existing.isFile()) throw new Error(`${out} is not a regular file; refusing to write to it.`);
+    if (!overwrite) throw new Error(`${out} already exists. Set overwrite=true to replace it.`);
+    if (!(await isOurExport(realOut))) {
+      throw new Error(`${out} was not created by this server (it does not start with the export header); refusing to overwrite it.`);
+    }
+  }
+
   const { transactions } = await loadAndCategorize(filePath, options, rulesPath);
   try {
-    await writeFile(out, toCategorizedCsv(transactions), { encoding: "utf8", flag: overwrite ? "w" : "wx" });
+    // "wx" fails if the file appeared since the check above, so a new file is never clobbered.
+    await writeFile(realOut, toCategorizedCsv(transactions), { encoding: "utf8", flag: existing ? "w" : "wx" });
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === "EEXIST") throw new Error(`${out} already exists. Set overwrite=true to replace it.`);
     throw e;
   }
-  return { output_path: out, rows: transactions.length };
+  return { output_path: realOut, rows: transactions.length };
 }

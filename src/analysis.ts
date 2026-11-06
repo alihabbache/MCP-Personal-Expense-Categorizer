@@ -107,7 +107,9 @@ export function findRecurring(txs: Transaction[]): RecurringGroup[] {
   for (const t of txs) {
     if (t.kind !== "expense" || t.amount >= 0 || !t.merchant) continue;
     const key = t.merchant.toLowerCase();
-    groups.set(key, [...(groups.get(key) ?? []), t]);
+    const list = groups.get(key);
+    if (list) list.push(t);
+    else groups.set(key, [t]);
   }
 
   const out: RecurringGroup[] = [];
